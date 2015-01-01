@@ -66,7 +66,7 @@ public:
             int u=S[i].first, v=S[i].second;
             sum += distance2(X[u], X[v], A);
         }
-        sum += C*log( D_sum_func(A) );
+        sum = sum - C*log( D_sum_func(A) );
         return sum;
     }
     vector<double> gradient(vector<double> A){
@@ -85,7 +85,7 @@ public:
         double D_dist_sum = D_sum_func(A);
         assert(D_dist_sum>eps);
         for (int j=0; j<d; j++){
-            grad[j] = -0.5 * grad[j] / D_dist_sum;
+            grad[j] = -0.5 * C * grad[j] / D_dist_sum;
         }
         for (int j=0; j<d; j++){
             grad[j] += S_sqrsum[j];
@@ -116,19 +116,27 @@ public:
 //        exit(0);
         double lambda = 1;
         int iter = 0;
-        while(lambda>eps*eps){
+        while(lambda>eps*eps && iter<30000){
             ++iter;
             auto grad = gradient(A);
             vector<double> tmpA(A);
 
-            bool flag = true;
+            double checksum = 0;
             for (int i=0; i<d; i++){
                 tmpA[i] -= lambda*grad[i];
-                if ( tmpA[i]<0 ) flag = false;
+                if ( tmpA[i]<0 ) {
+                    tmpA[i]=0;
+                }
+                checksum += tmpA[i];
             }
-
-            if (flag) {
-                printf("pre: %.6f  new: %.6f  iter:%d\n", g(A), g(tmpA), iter );
+            if (checksum<eps){
+                lambda *= 0.5;
+                continue;
+            }
+            double gA = g(A);
+            double gtmpA = g(tmpA);
+            {
+                printf("pre: %.6f  new: %.6f  iter:%d lambda=%e\n", gA, gtmpA, iter,lambda );
 //                char str[200];
 //                puts("a:");
 //                for (int i=0; i<13; i++){
@@ -148,7 +156,7 @@ public:
                 //gets(str);
             }
 
-            if ( g(tmpA)<g(A) && flag ){
+            if ( gtmpA<gA ){
                 A = tmpA;
                 lambda *= 1.05;
             }else{
@@ -173,8 +181,8 @@ int main(){
     train_lable.clear();
     train_data.clear();
     train_lable = {1,1,1,1,2,2,2,2};
-    train_data = { {2,20},{3,30},{4,40},{3,40},
-    {5,50},{6,60},{7,70},{6,50} };
+    train_data = { {3,20},{3,30},{2,40},{2,50},
+    {7,50},{7,60},{6,70},{6,80} };
 
     N = train_data.size();
     dim = train_data[0].size();
@@ -229,15 +237,38 @@ int main(){
 //    A = {51.943762417332515,0};
 //    printf("score: %.9f\n", test.g(A) );
 
-    for (int i=0; i<N; i++){
-        for (int j=0; j<N; j++){
-            printf("%.6f ",test.distance2(train_data[i], train_data[j], A) );
-        }
-        puts("");
+//    for (int i=0; i<N; i++){
+//        for (int j=0; j<N; j++){
+//            printf("%.6f ",test.distance2(train_data[i], train_data[j], A) );
+//        }
+//        puts("");
+//    }
+
+    double sum=0;
+    for (int i=S.size()-1; i>=0; i--){
+        int u=S[i].first, v=S[i].second;
+        sum += test.distance2(train_data[u], train_data[v], A);
     }
+
+    printf("S_sum2 = %.6f\n", sum );
+    printf("D_sum = %.6f\n", test.D_sum_func(A) );
+    printf("g(A) = %.6f\n", test.g(A) );
+    double S_max=-1e25, D_min=1e25;
+    for ( auto t:S ){
+        int u=t.first, v=t.second;
+        S_max = max(S_max, test.distance2(train_data[u], train_data[v], A) );
+    }
+    for ( auto t:D ){
+        int u=t.first, v=t.second;
+        D_min = min(D_min, test.distance2(train_data[u], train_data[v], A) );
+        //if( test.distance2(train_data[u], train_data[v], A) < 1e-9 ) printf("(%d,%d)\n",u,v);
+    }
+    printf("S_max=%e  D_min=%e\n", S_max, D_min);
+
     for (int i=0; i<dim; i++){
-        printf("%.6f\n", A[i]);
+        printf("%e\n", A[i]);
     }
+
     int u,v;
     while( scanf("%d%d", &u, &v)!=EOF ){
         printf("%.6f\n", test.distance2(train_data[u], train_data[v], A) );
